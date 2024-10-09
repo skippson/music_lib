@@ -27,7 +27,11 @@ cd src
 go run cmd/server/main.go
 ```
 
-## Swagger UI `http://localhost:8888/swagger/index.html`
+## Swagger UI
+
+Доступ к Swagger UI можно получить по следующему адресу:
+
+[http://localhost:8888/swagger/index.html](http://localhost:8888/swagger/index.html)
 
 ## Тестирование
 
