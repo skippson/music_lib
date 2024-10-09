@@ -51,8 +51,35 @@ func (s *service) setupRoutes() {
 	s.router.HandleFunc("/music/{group}/{song}", s.Update).Methods("PUT")
 	s.router.HandleFunc("/music/{group}/{song}", s.Delete).Methods("DELETE")
 	s.router.HandleFunc("/music/{group}/{song}/lyrics", s.Lyrics).Methods("GET")
+	s.router.HandleFunc("/music/{page}/{size}", s.LibraryWithPagination).Methods("GET")
 	s.router.HandleFunc("/music/filter/{page}/{size}", s.FilterWithPagination).Methods("GET")
 	s.router.HandleFunc("/music/{group}/{song}/lyrics/{page}/{size}", s.LyricsWithPagination).Methods("GET")
+}
+
+func (s *service) LibraryWithPagination(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	page, err := strconv.Atoi(params["page"])
+	if err != nil {
+		http.Error(w, "Invalid page number", http.StatusBadRequest)
+		return
+	}
+	size, err := strconv.Atoi(params["size"])
+	if err != nil {
+		http.Error(w, "Invalid page size", http.StatusBadRequest)
+		return
+	}
+
+	lib, err := s.repo.GetLibraryWithPagination(page, size)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Failed to fetch library data", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Successfully fetched song library data with page: %d, size: %d", page, size)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lib)
+
 }
 
 func (s *service) FilterWithPagination(w http.ResponseWriter, r *http.Request) {
@@ -68,11 +95,10 @@ func (s *service) FilterWithPagination(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	filter := r.URL.Query().Encode()
 	target, err := s.repo.FindWithFilterAndPagination(filter, page, size)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		http.Error(w, "Song not found", http.StatusNotFound)
 		return
 	}
@@ -84,37 +110,37 @@ func (s *service) FilterWithPagination(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *service) LyricsWithPagination(w http.ResponseWriter, r *http.Request) {
-    params := mux.Vars(r)
-    page, err := strconv.Atoi(params["page"])
-    if err != nil {
-        http.Error(w, "Invalid page number", http.StatusBadRequest)
-        return
-    }
-    size, err := strconv.Atoi(params["size"])
-    if err != nil {
-        http.Error(w, "Invalid page size", http.StatusBadRequest)
-        return
-    }
+	params := mux.Vars(r)
+	page, err := strconv.Atoi(params["page"])
+	if err != nil {
+		http.Error(w, "Invalid page number", http.StatusBadRequest)
+		return
+	}
+	size, err := strconv.Atoi(params["size"])
+	if err != nil {
+		http.Error(w, "Invalid page size", http.StatusBadRequest)
+		return
+	}
 
 	group := params["group"]
-    song := params["song"]
-    lyrics, err := s.repo.GetLyricsWithPagination(group, song, page, size)
-    if err != nil {
-        log.Println(err)
-        http.Error(w, "Song not found", http.StatusNotFound)
-        return
-    }
-    log.Printf("Successfully getting lyrics group: %s, song: %s, page: %d, size: %d", group, song, page, size)
+	song := params["song"]
+	lyrics, err := s.repo.GetLyricsWithPagination(group, song, page, size)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Song not found", http.StatusNotFound)
+		return
+	}
+	log.Printf("Successfully getting lyrics group: %s, song: %s, page: %d, size: %d", group, song, page, size)
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(lyrics)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lyrics)
 }
 
 func (s *service) Filter(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Encode()
 	target, err := s.repo.FindWithFilter(filter)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		http.Error(w, "Song not found", http.StatusNotFound)
 		return
 	}
@@ -127,7 +153,7 @@ func (s *service) Filter(w http.ResponseWriter, r *http.Request) {
 func (s *service) Library(w http.ResponseWriter, r *http.Request) {
 	lib, err := s.repo.GetLibrary()
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		http.Error(w, "Failed to fetch library data", http.StatusInternalServerError)
 		return
 	}
@@ -178,7 +204,7 @@ func (s *service) Update(w http.ResponseWriter, r *http.Request) {
 	group, song := params["group"], params["song"]
 	err := s.repo.UpdateSong(group, song, updatedSong)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err)
 		http.Error(w, "Failed to update song", http.StatusInternalServerError)
 		return
 	}
@@ -195,10 +221,22 @@ func (s *service) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.repo.AddSong(newSong)
+	log.Printf("Searching group: %s, song: %s", newSong.Group_name, newSong.Song)
+	status, err := s.repo.Find(newSong.Group_name, newSong.Song)
 	if err != nil {
-		log.Println(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err)
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	if !status {
+		err := s.repo.AddSong(newSong)
+		if err != nil {
+			log.Println(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	} else {
+		log.Printf("Group: %s, song: %s is already in the library", newSong.Group_name, newSong.Song)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

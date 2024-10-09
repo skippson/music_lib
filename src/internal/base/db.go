@@ -16,10 +16,12 @@ import (
 
 type Repository interface {
 	AddSong(newSong model.Song) error
+	Find(group, song string) (bool, error)
 	GetLibrary() ([]model.Song, error)
 	GetLyrics(group, song string) (string, error)
 	FindWithFilter(filter string) (model.Song, error)
 	GetLyricsWithPagination(group, song string, page, size int) ([]string, error)
+	GetLibraryWithPagination(page, size int) ([]model.Song, error)
 	FindWithFilterAndPagination(filter string, page, size int) ([]model.Song, error)
 	DeleteSong(group, song string) error
 	UpdateSong(group, song string, updateSong model.Song) error
@@ -63,7 +65,7 @@ func NewRepository(cfg config.Config) (Repository, error) {
 	}, nil
 }
 
-func encode(filter string) (string) {
+func encode(filter string) string {
 	query := strings.Split(filter, "&")
 
 	all := ""
@@ -73,7 +75,7 @@ func encode(filter string) (string) {
 		}
 
 		twice := strings.Split(val, "=")
-		if twice[0] == "group"{
+		if twice[0] == "group" {
 			twice[0] = "group_name"
 		}
 
@@ -85,7 +87,21 @@ func encode(filter string) (string) {
 	return all
 }
 
-func (r *repository) FindWithFilter(filter string) (model.Song, error){
+func (r *repository) Find(group, song string) (bool, error) {
+	var target model.Song
+	status := true
+	if err := r.base.Where("group_name = ? and song = ? ", group, song).First(&target).Error; err != nil {
+		if err.Error() == gorm.ErrRecordNotFound.Error() {
+			status = false
+		} else {
+			return false, fmt.Errorf("Error executing search request: %s", err.Error())
+		}
+	}
+
+	return status, nil
+}
+
+func (r *repository) FindWithFilter(filter string) (model.Song, error) {
 	log.Printf("Trying to find with filter: %s", filter)
 	query := encode(filter)
 	var target model.Song
@@ -96,35 +112,44 @@ func (r *repository) FindWithFilter(filter string) (model.Song, error){
 	return target, nil
 }
 
-func (r *repository) FindWithFilterAndPagination(filter string, page, size int) ([]model.Song, error){
-	log.Printf("Trying to find with filter: %s, page: %d, size: %s", filter, page, size)
-    offset := (page - 1) * size
-    var songs []model.Song
-	query := encode(filter)
-    if err := r.base.Where(query).Offset(offset).Limit(size).Find(&songs).Error; err != nil{
-		return nil, fmt.Errorf("Failed to find with filter: %s, page: %d, size: %s", filter, page, size)
+func (r *repository) GetLibraryWithPagination(page, size int) ([]model.Song, error) {
+	log.Printf("Trying to get library withpage: %d, size: %s", page, size)
+	offset := (page - 1) * size
+	var songs []model.Song
+	if err := r.base.Offset(offset).Limit(size).Find(&songs).Error; err != nil {
+		return nil, fmt.Errorf("Failed to get library with page: %d, size: %s", page, size)
 	}
-	
-    return songs, nil
+
+	return songs, nil
 }
 
-func (r *repository) GetLyricsWithPagination(group, song string, page, size int) ([]string, error){
+func (r *repository) FindWithFilterAndPagination(filter string, page, size int) ([]model.Song, error) {
+	log.Printf("Trying to find with filter: %s, page: %d, size: %s", filter, page, size)
+	offset := (page - 1) * size
+	var songs []model.Song
+	query := encode(filter)
+	if err := r.base.Where(query).Offset(offset).Limit(size).Find(&songs).Error; err != nil {
+		return nil, fmt.Errorf("Failed to find with filter: %s, page: %d, size: %s", filter, page, size)
+	}
+
+	return songs, nil
+}
+
+func (r *repository) GetLyricsWithPagination(group, song string, page, size int) ([]string, error) {
 	log.Printf("Trying to get lyrics of group: %s, song: %s, with page: %d, size: %d", group, song)
-    offset := (page - 1) * size
-    var songs []model.Song
-    if err := r.base.Where("group_name = ? AND song = ?", group, song).Offset(offset).Limit(size).Find(&songs).Error; err != nil{
+	offset := (page - 1) * size
+	var songs []model.Song
+	if err := r.base.Where("group_name = ? AND song = ?", group, song).Offset(offset).Limit(size).Find(&songs).Error; err != nil {
 		return nil, fmt.Errorf("Failed to get lyrics of group: %s, song: %s, with page: %d, size: %d", group, song)
 	}
 
 	lyrics := make([]string, 0)
-	for _, val := range songs{
+	for _, val := range songs {
 		lyrics = append(lyrics, val.Lyrics)
 	}
 
-    return lyrics, nil
+	return lyrics, nil
 }
-
-
 
 func (r *repository) AddSong(newSong model.Song) error {
 	log.Printf("Trying to add group: %s, song: %s", newSong.Group_name, newSong.Song)
