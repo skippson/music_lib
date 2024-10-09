@@ -78,12 +78,11 @@ func encode(filter string) string {
 		if twice[0] == "group" {
 			twice[0] = "group_name"
 		}
-
+		twice[1] = strings.Replace(twice[1],"+", " ", -1)
 		temple := twice[0] + " = " + "'" + twice[1] + "'"
 		all += temple
 	}
 
-	log.Println(all)
 	return all
 }
 
