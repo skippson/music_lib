@@ -27,6 +27,8 @@ cd src
 go run cmd/server/main.go
 ```
 
+## Swagger UI `http://localhost:8888/swagger/index.html`
+
 ## Тестирование
 
 Формат структуры:
@@ -97,4 +99,3 @@ curl -X GET "http://localhost:8888/music/filter/1/10?group=Group%20Name"
 ```bash
 curl -X GET "http://localhost:8888/music/Group%20Name/Song%20Name/lyrics/1/10"
 ```
-

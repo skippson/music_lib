@@ -6,11 +6,13 @@ import (
 )
 
 type Config interface {
-	GetConfig() string
+	GetConfigSQL() string
+	GetPort() string
 }
 
-type data_struct struct {
-	db_host     string
+type config struct {
+	port        string
+	host        string
 	db_port     string
 	db_user     string
 	db_name     string
@@ -19,17 +21,18 @@ type data_struct struct {
 }
 
 func NewConfig() (Config, error) {
-	cfg := data_struct{}
+	cfg := config{}
 	file, err := os.Open("../config/config.env")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read configuration. Error:%s", err.Error())
 	}
 	defer file.Close()
 
-	fmt.Fscanf(file, "DB_HOST=%s\nDB_PORT=%s\nDB_USER=%s\nDB_NAME=%s\nDB_PASSWORD=%s\nDB_SSLMODE=%s", &cfg.db_host, &cfg.db_port, &cfg.db_user, &cfg.db_name, &cfg.db_password, &cfg.db_sslmode)
+	fmt.Fscanf(file, "HOST=%s\nPORT=%s\nDB_PORT=%s\nDB_USER=%s\nDB_NAME=%s\nDB_PASSWORD=%s\nDB_SSLMODE=%s", &cfg.host, &cfg.port, &cfg.db_port, &cfg.db_user, &cfg.db_name, &cfg.db_password, &cfg.db_sslmode)
 
-	return data_struct{
-		db_host:     cfg.db_host,
+	return config{
+		port:        cfg.port,
+		host:        cfg.host,
 		db_port:     cfg.db_port,
 		db_user:     cfg.db_user,
 		db_name:     cfg.db_name,
@@ -38,6 +41,10 @@ func NewConfig() (Config, error) {
 	}, nil
 }
 
-func (d data_struct) GetConfig() string {
-	return fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=%s", d.db_host, d.db_port, d.db_user, d.db_name, d.db_password, d.db_sslmode)
+func (c config) GetConfigSQL() string {
+	return fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=%s", c.host, c.db_port, c.db_user, c.db_name, c.db_password, c.db_sslmode)
+}
+
+func (c config) GetPort() string {
+	return fmt.Sprintf(":%s", c.port)
 }

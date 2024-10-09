@@ -1,0 +1,291 @@
+definitions:
+  model.Song:
+    properties:
+      group:
+        type: string
+      id:
+        type: integer
+      release_date:
+        type: string
+      song:
+        type: string
+      text:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /music:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет новую песню в библиотеку, если она еще не существует
+      parameters:
+      - description: Информация о новой песне
+        in: body
+        name: song
+        required: true
+        schema:
+          $ref: '#/definitions/model.Song'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Песня успешно добавлена
+        "400":
+          description: Ошибка декодирования JSON
+          schema:
+            type: string
+        "500":
+          description: Что-то пошло не так
+          schema:
+            type: string
+      summary: Добавить песню
+      tags:
+      - music
+  /music/{group}/{song}:
+    delete:
+      description: Удаляет песню на основе имени группы и названия песни
+      parameters:
+      - description: Имя группы
+        in: path
+        name: group
+        required: true
+        type: string
+      - description: Название песни
+        in: path
+        name: song
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Песня успешно удалена
+        "500":
+          description: Failed to delete song
+          schema:
+            type: string
+      summary: Удалить песню
+      tags:
+      - music
+    put:
+      consumes:
+      - application/json
+      description: Обновляет информацию о песне на основе имени группы и названия
+        песни
+      parameters:
+      - description: Имя группы
+        in: path
+        name: group
+        required: true
+        type: string
+      - description: Название песни
+        in: path
+        name: song
+        required: true
+        type: string
+      - description: Обновленная информация о песне
+        in: body
+        name: song
+        required: true
+        schema:
+          $ref: '#/definitions/model.Song'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Песня успешно обновлена
+        "400":
+          description: Invalid request payload
+          schema:
+            type: string
+        "500":
+          description: Failed to update song
+          schema:
+            type: string
+      summary: Обновить песню
+      tags:
+      - music
+  /music/{group}/{song}/lyrics:
+    get:
+      description: Возвращает текст песни на основе имени группы и названия песни
+      parameters:
+      - description: Имя группы
+        in: path
+        name: group
+        required: true
+        type: string
+      - description: Название песни
+        in: path
+        name: song
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Текст песни
+          schema:
+            type: string
+        "404":
+          description: Song not found
+          schema:
+            type: string
+      summary: Получить текст песни
+      tags:
+      - music
+  /music/{group}/{song}/lyrics/{page}/{size}:
+    get:
+      description: Returns lyrics for a given group and title with pagination support
+      parameters:
+      - description: Group name
+        in: path
+        name: group
+        required: true
+        type: string
+      - description: Song title
+        in: path
+        name: song
+        required: true
+        type: string
+      - description: Page number
+        in: path
+        name: page
+        required: true
+        type: integer
+      - description: Page size
+        in: path
+        name: size
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Lyrics
+          schema:
+            items:
+              type: string
+            type: array
+        "400":
+          description: Invalid page number or size
+          schema:
+            type: string
+        "404":
+          description: Song not found
+          schema:
+            type: string
+      summary: Get lyrics with pagination
+      tags:
+      - music
+  /music/{page}/{size}:
+    get:
+      description: Возвращает список песен с пагинацией
+      parameters:
+      - description: Номер страницы
+        in: path
+        name: page
+        required: true
+        type: integer
+      - description: Размер страницы
+        in: path
+        name: size
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Song'
+            type: array
+        "400":
+          description: Invalid page number or size
+          schema:
+            type: string
+        "500":
+          description: Failed to fetch library data
+          schema:
+            type: string
+      summary: Получить библиотеку песен с пагинацией
+      tags:
+      - music
+  /music/filter:
+    get:
+      description: Возвращает список песен, отфильтрованных по заданным критериям
+      parameters:
+      - description: Критерии фильтрации в формате ключ=значение
+        in: query
+        name: filter
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список отфильтрованных песен
+          schema:
+            items:
+              $ref: '#/definitions/model.Song'
+            type: array
+        "404":
+          description: Song not found
+          schema:
+            type: string
+      summary: Фильтрация песен
+      tags:
+      - music
+  /music/filter/{page}/{size}:
+    get:
+      description: Возвращает список песен c фильтром и пагинацией
+      parameters:
+      - description: Номер страницы
+        in: path
+        name: page
+        required: true
+        type: integer
+      - description: Размер страницы
+        in: path
+        name: size
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Song'
+            type: array
+        "400":
+          description: Invalid page number or size
+          schema:
+            type: string
+        "404":
+          description: Song not found
+          schema:
+            type: string
+      summary: Получить библиотеку песен c фильтром и пагинацией
+      tags:
+      - music
+  /music/library:
+    get:
+      description: Возвращает полную библиотеку песен
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Полный список песен
+          schema:
+            items:
+              $ref: '#/definitions/model.Song'
+            type: array
+        "500":
+          description: Failed to fetch library data
+          schema:
+            type: string
+      summary: Получить библиотеку песен
+      tags:
+      - music
+swagger: "2.0"

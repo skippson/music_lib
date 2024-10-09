@@ -41,7 +41,7 @@ func applyMigrations(db *sql.DB) error {
 }
 
 func NewRepository(cfg config.Config) (Repository, error) {
-	c := cfg.GetConfig()
+	c := cfg.GetConfigSQL()
 	log.Print("Connecting to database...")
 	b, err := gorm.Open("postgres", c)
 	if err != nil {
@@ -136,7 +136,7 @@ func (r *repository) FindWithFilterAndPagination(filter string, page, size int) 
 }
 
 func (r *repository) GetLyricsWithPagination(group, song string, page, size int) ([]string, error) {
-	log.Printf("Trying to get lyrics of group: %s, song: %s, with page: %d, size: %d", group, song)
+	log.Printf("Trying to get lyrics of group: %s, song: %s, with page: %d, size: %d", group, song, page, size)
 	offset := (page - 1) * size
 	var songs []model.Song
 	if err := r.base.Where("group_name = ? AND song = ?", group, song).Offset(offset).Limit(size).Find(&songs).Error; err != nil {

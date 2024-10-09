@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"music/internal/base"
+	"music/internal/config"
 	"music/internal/model"
 	"net/http"
 	"strconv"
@@ -14,20 +15,27 @@ import (
 
 type Service interface {
 	Run() error
+	Router() *mux.Router
 	Close() error
 }
 
 type service struct {
 	router *mux.Router
 	repo   base.Repository
+	cfg    config.Config
 }
 
-func NewService(r base.Repository) Service {
+func (s *service) Router() *mux.Router {
+	return s.router
+}
+
+func NewService(c config.Config, r base.Repository) Service {
 	router := mux.NewRouter()
 
 	s := service{
 		router: router,
 		repo:   r,
+		cfg: c,
 	}
 
 	s.setupRoutes()
@@ -36,8 +44,9 @@ func NewService(r base.Repository) Service {
 }
 
 func (s *service) Run() error {
-	log.Println("Server running on port :8888")
-	if err := http.ListenAndServe(":8888", s.router); err != nil {
+	port := s.cfg.GetPort()
+	log.Printf("Server running on port %s", port)
+	if err := http.ListenAndServe(port, s.router); err != nil {
 		return fmt.Errorf("Failed to listen and serve. Error: %s", err.Error())
 	}
 
@@ -56,6 +65,16 @@ func (s *service) setupRoutes() {
 	s.router.HandleFunc("/music/{group}/{song}/lyrics/{page}/{size}", s.LyricsWithPagination).Methods("GET")
 }
 
+// @Summary Получить библиотеку песен с пагинацией
+// @Description Возвращает список песен с пагинацией
+// @Tags music
+// @Produce json
+// @Param page path int true "Номер страницы"
+// @Param size path int true "Размер страницы"
+// @Success 200 {array} model.Song
+// @Failure 400 {string} string "Invalid page number or size"
+// @Failure 500 {string} string "Failed to fetch library data"
+// @Router /music/{page}/{size} [get]
 func (s *service) LibraryWithPagination(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	page, err := strconv.Atoi(params["page"])
@@ -82,6 +101,16 @@ func (s *service) LibraryWithPagination(w http.ResponseWriter, r *http.Request) 
 
 }
 
+// @Summary Получить библиотеку песен c фильтром и пагинацией
+// @Description Возвращает список песен c фильтром и пагинацией
+// @Tags music
+// @Produce json
+// @Param page path int true "Номер страницы"
+// @Param size path int true "Размер страницы"
+// @Success 200 {array} model.Song
+// @Failure 400 {string} string "Invalid page number or size"
+// @Failure 404 {string} string "Song not found"
+// @Router /music/filter/{page}/{size} [get]
 func (s *service) FilterWithPagination(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	page, err := strconv.Atoi(params["page"])
@@ -109,6 +138,19 @@ func (s *service) FilterWithPagination(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(target)
 }
 
+// LyricsWithPagination gets lyrics with pagination
+// @Summary Get lyrics with pagination
+// @Description Returns lyrics for a given group and title with pagination support
+// @Tags music
+// @Produce json
+// @Param group path string true "Group name"
+// @Param song path string true "Song title"
+// @Param page path int true "Page number"
+// @Param size path int true "Page size"
+// @Success 200 {array} string "Lyrics"
+// @Failure 400 {string} string "Invalid page number or size"
+// @Failure 404 {string} string "Song not found"
+// @Router /music/{group}/{song}/lyrics/{page}/{size} [get]
 func (s *service) LyricsWithPagination(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	page, err := strconv.Atoi(params["page"])
@@ -136,6 +178,15 @@ func (s *service) LyricsWithPagination(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lyrics)
 }
 
+// Filter фильтрует песни по заданным критериям
+// @Summary Фильтрация песен
+// @Description Возвращает список песен, отфильтрованных по заданным критериям
+// @Tags music
+// @Produce json
+// @Param filter query string false "Критерии фильтрации в формате ключ=значение"
+// @Success 200 {array} model.Song "Список отфильтрованных песен"
+// @Failure 404 {string} string "Song not found"
+// @Router /music/filter [get]
 func (s *service) Filter(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Encode()
 	target, err := s.repo.FindWithFilter(filter)
@@ -150,6 +201,14 @@ func (s *service) Filter(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(target)
 }
 
+// Library возвращает библиотеку песен
+// @Summary Получить библиотеку песен
+// @Description Возвращает полную библиотеку песен
+// @Tags music
+// @Produce json
+// @Success 200 {array} model.Song "Полный список песен"
+// @Failure 500 {string} string "Failed to fetch library data"
+// @Router /music/library [get]
 func (s *service) Library(w http.ResponseWriter, r *http.Request) {
 	lib, err := s.repo.GetLibrary()
 	if err != nil {
@@ -163,6 +222,16 @@ func (s *service) Library(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(lib)
 }
 
+// Lyrics возвращает текст песни по указанной группе и названию
+// @Summary Получить текст песни
+// @Description Возвращает текст песни на основе имени группы и названия песни
+// @Tags music
+// @Produce json
+// @Param group path string true "Имя группы"
+// @Param song path string true "Название песни"
+// @Success 200 {string} string "Текст песни"
+// @Failure 404 {string} string "Song not found"
+// @Router /music/{group}/{song}/lyrics [get]
 func (s *service) Lyrics(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	group, song := params["group"], params["song"]
@@ -178,6 +247,15 @@ func (s *service) Lyrics(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(text)
 }
 
+// Delete удаляет песню из библиотеки по указанной группе и названию
+// @Summary Удалить песню
+// @Description Удаляет песню на основе имени группы и названия песни
+// @Tags music
+// @Param group path string true "Имя группы"
+// @Param song path string true "Название песни"
+// @Success 204 "Песня успешно удалена"
+// @Failure 500 {string} string "Failed to delete song"
+// @Router /music/{group}/{song} [delete]
 func (s *service) Delete(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	group, song := params["group"], params["song"]
@@ -192,6 +270,19 @@ func (s *service) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Update обновляет информацию о песне в библиотеке
+// @Summary Обновить песню
+// @Description Обновляет информацию о песне на основе имени группы и названия песни
+// @Tags music
+// @Accept json
+// @Produce json
+// @Param group path string true "Имя группы"
+// @Param song path string true "Название песни"
+// @Param song body model.Song true "Обновленная информация о песне"
+// @Success 200 "Песня успешно обновлена"
+// @Failure 400 {string} string "Invalid request payload"
+// @Failure 500 {string} string "Failed to update song"
+// @Router /music/{group}/{song} [put]
 func (s *service) Update(w http.ResponseWriter, r *http.Request) {
 	var updatedSong model.Song
 	if err := json.NewDecoder(r.Body).Decode(&updatedSong); err != nil {
@@ -213,6 +304,17 @@ func (s *service) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 }
 
+// Add добавляет новую песню в библиотеку
+// @Summary Добавить песню
+// @Description Добавляет новую песню в библиотеку, если она еще не существует
+// @Tags music
+// @Accept json
+// @Produce json
+// @Param song body model.Song true "Информация о новой песне"
+// @Success 201 "Песня успешно добавлена"
+// @Failure 400 {string} string "Ошибка декодирования JSON"
+// @Failure 500 {string} string "Что-то пошло не так"
+// @Router /music [post]
 func (s *service) Add(w http.ResponseWriter, r *http.Request) {
 	var newSong model.Song
 	if err := json.NewDecoder(r.Body).Decode(&newSong); err != nil {
