@@ -10,15 +10,22 @@ import (
 func main(){
 	config, err := config.NewConfig()
 	if err != nil{
-		log.Fatalf("error loading .env", err)
+		log.Fatalln(err)
 	}
 
 	repository, err := base.NewRepository(config)
 	if err != nil{
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	service := service.NewService(repository)
+	defer func(){
+		if err := service.Close(); err != nil{
+			log.Fatalln(err)
+		}
+	}()
 
-	service.Run()
+	if err := service.Run(); err != nil{
+		log.Fatalln(err)
+	}
 }

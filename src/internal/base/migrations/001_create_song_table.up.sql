@@ -1,9 +1,8 @@
 -- +goose Up
-CREATE TABLE if not exists songs (
-    id SERIAL PRIMARY KEY,
-    group_name VARCHAR(255),
-    song VARCHAR(255)
+create table if not exists songs (
+    id serial PRIMARY KEY,
+    group_name varchar(255),
+    song varchar(255),
+    release_date varchar(255),
+    lyrics varchar(255)
 );
-
--- +goose Down
--- drop table songs

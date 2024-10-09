@@ -22,7 +22,7 @@ func NewConfig() (Config, error) {
 	cfg := data_struct{}
 	file, err := os.Open("../config/config.env")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to read configuration. Error:%s", err.Error())
 	}
 	defer file.Close()
 

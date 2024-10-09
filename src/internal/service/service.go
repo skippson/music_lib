@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"music/internal/base"
 	"music/internal/model"
@@ -12,6 +13,7 @@ import (
 
 type Service interface {
 	Run() error
+	Close() error
 }
 
 type service struct {
@@ -19,12 +21,12 @@ type service struct {
 	repo   base.Repository
 }
 
-func NewService(r base.Repository) (Service){
+func NewService(r base.Repository) Service {
 	router := mux.NewRouter()
 
 	s := service{
 		router: router,
-		repo: r,
+		repo:   r,
 	}
 
 	s.setupRoutes()
@@ -32,28 +34,31 @@ func NewService(r base.Repository) (Service){
 	return &s
 }
 
-func (s *service) Run() error{
-	log.Println("Server running on 8080")
-	http.ListenAndServe(":8080", s.router)
+func (s *service) Run() error {
+	log.Println("Server running on port :8888")
+	if err := http.ListenAndServe(":8888", s.router); err != nil{
+		return fmt.Errorf("Failed to listen and serve. Error: %s", err.Error())
+	}
+
 	return nil
 }
 
 func (s *service) setupRoutes() {
-	s.router.HandleFunc("/songs", s.Library).Methods("GET")
-	s.router.HandleFunc("/songs/{song}", s.Lyrics).Methods("GET")
-	s.router.HandleFunc("/songs/{song}", s.Delete).Methods("DELETE")
-	s.router.HandleFunc("/songs/{song}", s.Update).Methods("PUT")
-	s.router.HandleFunc("/songs", s.Add).Methods("POST")
+	s.router.HandleFunc("/music", s.Library).Methods("GET")
+	s.router.HandleFunc("/music/{group}/{song}/lyrics", s.Lyrics).Methods("GET")
+	s.router.HandleFunc("/music/{group}/{song}", s.Delete).Methods("DELETE")
+	s.router.HandleFunc("/music/{group}/{song}", s.Update).Methods("PUT")
+	s.router.HandleFunc("/music", s.Add).Methods("POST")
 }
 
 func (s *service) Library(w http.ResponseWriter, r *http.Request) {
 	lib, err := s.repo.GetLibrary()
 	if err != nil {
-		log.Println("Error fetching library data:", err)
+		log.Println(err.Error())
 		http.Error(w, "Failed to fetch library data", http.StatusInternalServerError)
 		return
 	}
-	log.Println("success")
+	log.Println("Successfully fetched song library data")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(lib)
@@ -61,15 +66,14 @@ func (s *service) Library(w http.ResponseWriter, r *http.Request) {
 
 func (s *service) Lyrics(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	songName := params["song"]
-
-	text, err := s.repo.GetLyrics(songName)
+	group, song := params["group"], params["song"]
+	text, err := s.repo.GetLyrics(group, song)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Song not found", http.StatusNotFound)
 		return
 	}
-	log.Println("success")
+	log.Printf("Getting lyrics group: %s, song: %s completed", group, song)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(text)
@@ -77,23 +81,19 @@ func (s *service) Lyrics(w http.ResponseWriter, r *http.Request) {
 
 func (s *service) Delete(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	songName := params["song"]
-
-	err := s.repo.DeleteSong(songName)
+	group, song := params["group"], params["song"]
+	err := s.repo.DeleteSong(group,song)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Failed to delete song", http.StatusInternalServerError)
 		return
 	}
-	log.Println("success")
+	log.Printf("Group: %s, song:%s successfully removed from the library", group, song)
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *service) Update(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	songName := params["song"]
-
 	var updatedSong model.Song
 	if err := json.NewDecoder(r.Body).Decode(&updatedSong); err != nil {
 		log.Println("Error decoding request body:", err)
@@ -101,16 +101,17 @@ func (s *service) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.repo.UpdateSong(songName, updatedSong)
+	params := mux.Vars(r)
+	group, song := params["group"], params["song"]
+	err := s.repo.UpdateSong(group, song, updatedSong)
 	if err != nil {
-		log.Println("Error updating song:", err)
+		log.Println(err.Error())
 		http.Error(w, "Failed to update song", http.StatusInternalServerError)
 		return
 	}
-	log.Println("success")
+	log.Printf("Group: %s, song: %s successfully updated")
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(updatedSong)
 }
 
 func (s *service) Add(w http.ResponseWriter, r *http.Request) {
@@ -123,12 +124,18 @@ func (s *service) Add(w http.ResponseWriter, r *http.Request) {
 
 	err := s.repo.AddSong(newSong)
 	if err != nil {
-		log.Println("Error adding song", nil)
+		log.Println(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	log.Println("success")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	// json.NewEncoder(w).Encode(newSong)
+}
+
+func (s *service) Close() error{
+	if err := s.repo.Close(); err != nil{
+		return fmt.Errorf("Failed to close server. Error: %s", err.Error())
+	}
+
+	return nil
 }

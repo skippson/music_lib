@@ -8,17 +8,18 @@ import (
 	"music/internal/model"
 
 	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres" // Импортируем драйвер PostgreSQL
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/pressly/goose/v3"
-	_ "github.com/lib/pq" // Импортируем драйвер PostgreSQL для sql.DB
+	_ "github.com/lib/pq"
 )
 
 type Repository interface {
 	AddSong(newSong model.Song) error
 	GetLibrary() ([]model.Song, error)
-	GetLyrics(name string) (string, error)
-	DeleteSong(name string) error
-	UpdateSong(oldNameSong string, updateSong model.Song) error
+	GetLyrics(group, song string) (string, error)
+	DeleteSong(group, song string) error
+	UpdateSong(group, song string, updateSong model.Song) error
+	Close() error
 }
 
 type repository struct {
@@ -36,28 +37,22 @@ func applyMigrations(db *sql.DB) error {
 func NewRepository(cfg config.Config) (Repository, error) {
 	c := cfg.GetConfig()
 	log.Print("Connecting to database...")
-	
-	fmt.Println(c)
 	b, err := gorm.Open("postgres", c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to open database. Error: %s", err.Error())
 	}
 
 	sqlDB := b.DB()
 	if err := sqlDB.Ping(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to ping database. Error: %s", err.Error())
 	}
-	log.Println("success")
+	log.Println("Connecting to database: success")
 
 	log.Print("Running migrations...")
 	if err := applyMigrations(sqlDB); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to make migrations. Error: %s", err.Error())
 	}
-
-	// if err := goose.Up(chance, "./migrations"); err != nil {
-	// 	return nil, err
-	// }
-	log.Println("database migrations completed")
+	log.Println("Database migrations completed")
 
 	return &repository{
 		base: b,
@@ -65,50 +60,58 @@ func NewRepository(cfg config.Config) (Repository, error) {
 }
 
 func (r *repository) AddSong(newSong model.Song) error {
-	fmt.Println(newSong)
+	log.Printf("Trying to add group: %s, song: %s", newSong.Group_name, newSong.Song)
 	r.base.Create(&newSong)
 	if r.base.Error != nil {
-		return fmt.Errorf("Failed to add song:%w", r.base.Error)
+		return fmt.Errorf("Failed to add group: %s, song: %s. Error:%s", newSong.Group_name, newSong.Song, r.base.Error.Error())
 	}
 
-	log.Println("Song added with ID:", newSong.ID)
+	log.Printf("Group: %s, song: %s added with ID:%d",newSong.Group_name, newSong.Song, newSong.ID)
 	return nil
 }
 
 func (r *repository) GetLibrary() ([]model.Song, error) {
-	log.Print("Trying to get library data...")
+	log.Print("Trying to fetching library data...")
 	data := make([]model.Song, 0)
 
 	if err := r.base.Find(&data).Error; err != nil {
-		return nil, fmt.Errorf("error:", err)
+		return nil, fmt.Errorf("Failed to fetch library data. Error: %s ", err.Error())
 	}
 
 	return data, nil
 }
 
-func (r *repository) GetLyrics(name string) (string, error) {
-	log.Print("Trying to get lyrics...")
-	var song model.Song
-	if err := r.base.Where("song = ?", name).First(&song).Error; err != nil {
-		return "", fmt.Errorf("error:", err)
+func (r *repository) GetLyrics(group, song string) (string, error) {
+	log.Printf("Trying to get lyrics of group: %s, song: %s", group, song)
+	var target model.Song
+	if err := r.base.Where("group_name = ? and song = ?", group, song).First(&target).Error; err != nil {
+		return "", fmt.Errorf("Failed to get lyrics of group: %s, song: %s. Error: %s", group, song, err.Error())
 	}
 
-	return song.Group_name, nil
+	return target.Lyrics, nil
 }
 
-func (r *repository) DeleteSong(name string) error {
-	log.Print("Trying to delete song...")
-	if err := r.base.Where("song = ?", name).Delete(&model.Song{}).Error; err != nil {
-		return fmt.Errorf("error:", err)
+func (r *repository) DeleteSong(group, song string) error {
+	log.Printf("Trying to delete group: %s, song: %s", group, song)
+	if err := r.base.Where("group_name = ? and song = ?", group, song).Delete(&model.Song{}).Error; err != nil {
+		return fmt.Errorf("Failed to delete group: %s, song: %s. Error: %s ", group, song, err.Error())
 	}
 
 	return nil
 }
 
-func (r *repository) UpdateSong(oldNameSong string, updateSong model.Song) error {
-	log.Print("Trying to update song...")
-	if err := r.base.Model(&model.Song{}).Where("song = ?", oldNameSong).Update(&updateSong).Error; err != nil {
-		return fmt.Errorf("error:", err)
+func (r *repository) UpdateSong(group, song string, updateSong model.Song) error {
+	log.Printf("Trying to update group: %s, song: %s")
+	if err := r.base.Model(&model.Song{}).Where("group_name = ? and song = ?", group, song).Update(&updateSong).Error; err != nil {
+		return fmt.Errorf("Failed to update group: %s, song: %s. Error: %s", group, song, err.Error())
+	}
+
+	return nil
+}
+
+func (r * repository) Close() error{
+	if err := r.base.Close(); err != nil{
+		return fmt.Errorf("Failed to close database. Error: %s", err.Error())
 	}
 
 	return nil
